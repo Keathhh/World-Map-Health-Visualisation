@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+        <head>
+                <script src="https://d3js.org/d3.v7.min.js"></script>
+                <script src="./helper.js"></script>
+                <script src="./data.js"></script>
+                <script src="./dataTemplate.js"></script>
+                <script src="./graphDraw.js"></script>
+                <script src="./domCtl.js"></script>
+                <link rel="stylesheet" href="./index.css">
+                
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Document</title>
+        </head>
+        <body>
+                <div>
+                        <label for="year">Viewing statistics of year: </label>
+                        <button onclick="yearStep(0)"><</button>
+                        <select name="year" id="year" onchange="onYearSelection(event)">
+                                <option value="2015">2015</option>
+                                <option value="2016">2016</option>
+                                <option value="2017">2017</option>
+                                <option value="2018">2018</option>
+                                <option value="2019">2019</option>
+                                <option value="2020">2020</option>
+                                <option value="2021">2021</option>
+                                <option value="2022" selected>2022</option>
+                        </select>
+                        <button onclick="yearStep(1)">></button>
+                        <input type="checkbox" name="animate" id="animate" onchange="animate_yearly(this)">
+                        <label for="animate">Animate yearly statistic</label>
+                        <input type="range" min="2015" max="2022" name="" id="player" oninput="sliderMove(this)">
+
+                        <select name="consumption" id="consumption" onchange="selectConsumption(this)">
+                                <option value="1" selected>Fruit and vegetable consumption</option>
+                                <!-- <option value="2">Fat and protein intake</option> -->
+                                <option value="3">Calorie intake</option>
+                        </select>
+                        <br>
+                        <hr>
+                        <div>
+                                <input type="radio" name="stat_Sel" id="expenditure" onclick="selectStat(this)" value="expenditure" checked="checked">
+                                <label for="stat_Sel">Expenditure</label>
+                                <input type="radio" name="stat_Sel" id="expectancy" onclick="selectStat(this)" value="expectancy">
+                                <label for="stat_Sel">Expectancy</label>
+                                <!-- <input type="checkbox" name="line_superimpose" id="line_superimpose" onchange=""><label for="line_superimpose">Superimpose expenditure and expectancy</label> -->
+                                <input type="checkbox" name="focusRelevant" id="focusRelevant" onchange="toggleRelevance(this)"><label for="focusRelevant">Hide countries without data</label>
+
+                                <!-- <select name="expectancy_discriminator" id="">
+                                        <option value="m">Male</option>
+                                        <option value="f">Female</option>
+                                        <option value="t" selected>Total</option>
+                                </select> -->
+                        </div>
+                        <div>
+  
+                        </div>
+                </div>
+                <hr>
+                <script>
+                        // impl: subparser- state machine
+
+
+                        // graphing parameters
+                        // var colorScale = d3.scaleLinear().range(["#48F504","#FF0000"])
+                        var dataset_geoJSON           = "world.json";
+                        var dataset_healthExpenditure = "expenditure.csv";
+                        var dataset_expectancy        = "expectancy.csv";
+                        var dataset_consumptionHabits = "consumption.csv";
+
+                        // year selection
+                        var currentYearSel = 2022;
+
+                        // measure, sex, age, measurement method, combined unit of measure
+                        
+                        // state machine vars
+                        var state_isDataRow           = false;
+                        var state_isClassificationRow = true;
+                        
+                        //ln no
+                        var state_lastDataRow
+                        
+
+                        var expenditureRanges = structuredClone(template_yearlyDataDomain);
+
+
+
+                        // render layers object notation
+                        var allCountries;
+                        var dataCountries = structuredClone(template_namedgeoJson);
+                        // var expenditure_dataCountries = structuredClone(template_namedgeoJson);
+                        // var expectancy_dataCountries = structuredClone(template_namedgeoJson);
+
+                        // object for data domain for scalability
+                        var dataDomains = {} 
+
+                        var domain_expenditure = structuredClone(template_emptyArray)
+                        var domain_expectancy  = structuredClone(template_emptyArray)
+
+                        // var selected_censusName = "expectancy_Total";
+                        // expenditure:dom_exp, expectancy_tot|_male|_fem:dom_exp, 
+                        var selected_censusName = "expenditure";
+                        var censusDomain = "domain_"+selected_censusName;
+
+                        // var selected_censusType = ""
+
+                        // var selected_censusQualifiers = ["Male", "Total"]
+
+                        // var censusOptions = []
+                        
+                
+
+                
+
+
+
+
+
+                // init full svg
+                d3.select("body").append("svg").attr("id", "visualization").attr("width", w).attr("height", fullh);
+                // svg canvas selection
+                var svgContext = d3.select("body").select("#visualization");
+                // draw map background
+                d3.select("body").select("svg").append("rect").attr("width", w).attr("height", Mh).style("fill",mapOcean_fillStyle).attr("id", "mapBackground")
+                // create new group for the map paths
+                baselayer = newGroup(svgContext,"map");
+                baselayer.attr("oncontextmenu","return false")
+                
+                //create new group for bottom graph
+                graphlayer = newGroup(svgContext,"graph")
+                // graphlayer.append("rect").attr("width", w).attr("height",fullh-Mh).style("fill","red")
+
+                d3.json(dataset_geoJSON).then((worldJson)=>{
+                        console.log("started loading expenditure")
+                        ////////////////////////// MERGING IN EXPENDITURE DATA ////////////////////////////////////////////////////////////////////////////////////////////////////////
+                        var census = structuredClone(template_OECDObject)
+
+                        var censusName = "expenditure"
+
+
+                        d3.csv(dataset_healthExpenditure, (row_Expenditure)=>{
+                                census.yearlyData     = structuredClone(template_perCountryYearlyData);
+
+                                [state_isDataRow, state_isClassificationRow] = perCountryFlags(row_Expenditure.column1)
+
+                                if (state_isClassificationRow) {
+                                        classificationAttr = returnClassificationAttr(row_Expenditure.column1)
+                                        currentClassification = returnClassification(classificationAttr[0])
+                                        census = populateCensusMetadata(census, currentClassification, classificationAttr)
+                                }
+
+                                if (state_isDataRow) {
+                                        var {column1, ...rawExpenditure_yearly} = row_Expenditure
+                                        // mapping nonstandard country names: oecd naming -> geojson naming 
+                                        var currentCountry = name_mapToGjson(column1);
+                                        // inputs: rawexpyearly, current census obj, selectedexpenditure , selected census name, worldjson
+                                        var rawExpenditure_Entries = Object.entries(rawExpenditure_yearly)
+                                        // parse and populate yearly data
+                                        for (let i = 0; i < rawExpenditure_Entries.length; i++) {
+                                                expenditureEntry = rawExpenditure_Entries[i]
+                                                y = Object.keys(template_perCountryYearlyData)[i] 
+                                                values = parse_value(expenditureEntry[1])
+                                                // console.log(y)
+                                                census.yearlyData[y] = values;
+                                                if (values!=null) {domain_expenditure.push(Number(values[0]))}
+                                        }
+
+                                        // iter through world json
+                                        // adding worldjson matches with given data to geotemplate overdraw object
+                                        // context: within iteration of every csv row
+                                        for (let i = 0; i < worldJson.features.length; i++) {
+                                                // when worldjson country name matches current
+                                                if (worldJson.features[i].properties.name == countryMapping(currentCountry)) {
+                                                        // populate individual country with census data
+                                                        // structuredclone, probbaly to avoid references
+                                                        worldJson.features[i].expenditure = structuredClone(census);
+                                                        // push the populated country onto delta, with conditions
+                                                        dataCountries = mapDelta(worldJson.features[i], dataCountries, censusName, false)
+                                                }
+                                        }
+                                }
+                        ////////////////////////// MERGING IN EXPECTANCY DATA ////////////////////////////////////////////////////////////////////////////////////////////////////////
+                        }).then((d)=>{
+                                console.log("started loading expectancy")
+                                var census = structuredClone(template_OECDObject)
+                                var censusName = "expectancy"
+                                // prep datadomain entry for selected statistic
+                                // dataDomains[censusName]= []
+                                var censusEntryName
+                                var ln = 1
+                                var parsing = true;
+                                d3.csv("expectancy.csv",(row_Expectancy)=>{
+                                        ln++
+                                        if (parsing) {
+                                                if (ln==54) {parsing = false}
+                                                // console.log(ln)
+                                                // console.log(?)
+                                                census.yearlyData     = structuredClone(template_perCountryYearlyData);
+                                                [state_isDataRow, state_isClassificationRow] = perCountryFlags(row_Expectancy.column1)
+                                                // console.log("NOW READING LN "+ln)
+                                                if (state_isClassificationRow) {
+                                                        classificationAttr = returnClassificationAttr(row_Expectancy.column1)
+
+                                                        currentClassification = returnClassification(classificationAttr[0])
+
+                                                        census = populateCensusMetadata(census, currentClassification, classificationAttr)
+                                                        censusEntryName = censusName
+                                                }
+
+                                                if (state_isDataRow) {
+                                                        //unpack data
+                                                        var {column1, ...rawExpectancy_yearly} = row_Expectancy
+                                                        // mapping nonstandard country names: oecd naming -> geojson naming 
+                                                        var currentCountry = name_mapToGjson(column1);
+
+                                                        // inputs: rawexpyearly, current census obj, selectedexpenditure , selected census name, worldjson
+                                                        var rawExpectancy_Entries = Object.entries(rawExpectancy_yearly)
+                                                        // parse and populate yearly data
+                                                        for (let i = 0; i < rawExpectancy_Entries.length; i++) {
+                                                                expectancyEntry = rawExpectancy_Entries[i]
+                                                                y = Object.keys(census.yearlyData)[i] 
+                                                                values = parse_value(expectancyEntry[1])
+                                                                census.yearlyData[y] = values;
+                                                                if (values!=null) {domain_expectancy.push(Number(values[0]))}
+                                                        }
+
+                                                        // iter through world json
+                                                        // adding worldjson matches with given data to geotemplate overdraw object
+                                                        // context: within iteration of every csv row
+                                                        for (let i = 0; i < worldJson.features.length; i++) {
+                                                                // when worldjson country name matches current
+                                                                if (worldJson.features[i].properties.name == countryMapping(currentCountry)) {
+                                                                        worldJson.features[i][censusEntryName] = structuredClone(census);
+                                                                        dataCountries = mapDelta(worldJson.features[i], dataCountries, censusEntryName, false)
+                                                                }
+                                                        }
+                                                }
+                                        }
+                                })
+                        ////////////////////////// MERGING IN CONSUMPTION DATA ////////////////////////////////////////////////////////////////////////////////////////////////////////
+                        }).then((d)=>{
+                                // line number tracking
+                                var ln=2;
+                                // state_lastDataRow
+                                // current stat buffers
+                                // spawn a new census object on measure change
+                                var last_measure, last_metric, sample_method;
+                                var demographic = tmp_demographic = []
+
+                                var lastInfoRow;
+
+                                //census buffer
+                                var censusObj;
+
+
+
+                                d3.csv("consumption.csv",(current_row)=>{
+                                        ++ln;
+                                        [state_isDataRow, state_isClassificationRow] = perCountryFlags(current_row.column1)
+                                        
+                                        // console.log(ln)
+                                        
+                                        if (state_isClassificationRow) {
+                                                classificationAttr = returnClassificationAttr(current_row.column1)
+                                                currentClassification = returnClassification(classificationAttr[0])
+                                                
+                                                // handle measure row if change occurs
+                                                if (currentClassification==1 && classificationAttr[1]!=last_measure) {
+                                                        censusObj = structuredClone(template_OECDObject)
+                                                        last_measure = classificationAttr[1]
+                                                        // console.log("now changing measure cache to: "+last_measure)
+                                                        
+
+                                                }
+                                                
+                                                if (currentClassification==2 && classificationAttr[1]!=demographic[0]) {
+                                                        // console.log("R: "+current_row.column1)
+                                                        // console.log("DEMOGRAPHIC CHANGE")
+                                                        demographic[0] = tmp_demographic[0] = classificationAttr[1]
+
+                                                        // censusObj.demographic = demographic
+                                                }
+                                                
+                                                if (currentClassification==3 && classificationAttr[1]!=demographic[1]) {
+                                                        // console.log("R: "+current_row.column1)
+                                                        // console.log("DEMOGRAPHIC CHANGE")
+                                                        demographic[1] = tmp_demographic[1] = classificationAttr[1]
+                                                }
+                                                censusObj = populateCensusMetadata(censusObj, currentClassification, classificationAttr)
+                                                // censusObj = populateCensusMetadata(censusObj, currentClassification, classificationAttr)
+                                                lastInfoRow = ln;
+                                        }
+                                        
+                                        
+                                        
+                                        if (state_isDataRow){
+                                                demographic = []
+                                                // if the data row is the first after the info block
+                                                if ((ln)==lastInfoRow+1) {
+                                                        // console.log(censusObj)
+                                                }
+                                                
+                                                var {column1, ...values_yearly} = current_row;
+                                                var currentCountry = name_mapToGjson(column1);
+                                                var rawValues_yearlyEntries = Object.entries(values_yearly)
+
+                                                var tmp_censusEntry = structuredClone(template_censusEntry)
+                                                tmp_censusEntry.discrims = tmp_demographic;
+
+                                                // parse and populate yearly data
+                                                for (let i = 0; i < rawValues_yearlyEntries.length; i++) {
+                                                        currentYearEntry = rawValues_yearlyEntries[i]
+                                                        // console.log(tmp_censusEntry)
+                                                        y = Object.keys(template_perCountryYearlyData)[i] 
+                                                        values = parse_value(currentYearEntry[1])
+                                                        tmp_censusEntry.data[y] = values;
+
+                                                }
+
+                                                // console.log(worldJson)
+
+                                                // tack on census object to world json and add it to delta 
+                                                for (let i = 0; i < worldJson.features.length; i++) {
+                                                        if (worldJson.features[i].properties.name == countryMapping(currentCountry)) {
+                                                                if (!(returnMeasure(last_measure) in worldJson.features[i])) {
+                                                                        // console.log(last_measure+"not  in")
+                                                                        worldJson.features[i][returnMeasure(last_measure)] = structuredClone(censusObj);
+                                                                }
+                                                                worldJson.features[i][returnMeasure(last_measure)].censuses.push(structuredClone(tmp_censusEntry))
+                                                                // console.log(worldJson.features[i][returnMeasure(last_measure)])
+                                                                // element[returnMeasure(last_measure)] = structuredClone(censusObj);
+                                                                // console.log(worldJson.features[i])
+
+                                                                // worldJson.features[i][returnMeasure(last_measure)].censuses.push(structuredClone(tmp_censusEntry));
+                                                                dataCountries = mapDelta(worldJson.features[i], dataCountries, last_measure, true)
+                                                        }
+                                                }
+
+                                        }
+                                })
+
+
+
+                        }).then((d)=>{ //promise: after csv parse
+                                // drawMap_baseLayer(baselayer, json, mapPath)
+                                // d3.select("#canvas").append("text")                
+                                // .attr("id", "yearheading")
+                                // .attr("x", Mw/2)
+                                // .attr("y", 40)
+                                // .attr("text-anchor", "middle")
+                                // .style("font-size", "40px")
+                                // .text("Statistical year: "+currentYearSel);
+                                graphlayer.append("g").attr("id","left")
+                                graphlayer.append("g").attr("id","right")
+
+                                graphlayer.append('line')
+                                .style("stroke", 'black').attr("stroke-width", 1)
+                                .attr("x1", w/2).attr("y1", Mh).attr("x2", w/2).attr("y2", Mh)
+                                .transition().ease(d3.easeExpIn).duration(1000)
+                                .attr("x1", w/2)
+                                .attr("y1", Mh)
+                                .attr("x2", w/2)
+                                .attr("y2", fullh)
+
+
+
+
+                                console.log("started draw routine")
+                                
+                                
+                                allCountries = worldJson;
+                                selectedConsumption = "pop_perc"
+                                
+                                // console.log(selected_censusName)
+                                // compute_colorScale(eval(censusDomain))
+                                drawMap(baselayer, allCountries, mapPath, currentYearSel, selected_censusName)
+                                // drawHeading(baselayer, currentYearSel, 40, w/2, 40)
+
+                                console.log(dataCountries)
+
+                        })
+                        
+                })
+
+
+        </script>
+        <div class="fillsvgs" style="height:0;">
+                <svg height="10" width="10" xmlns="http://www.w3.org/2000/svg" version="1.1"> <defs> <pattern id="diagonal-stripe-1" patternUnits="userSpaceOnUse" width="10" height="10"> <image xlink:href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPScxMCcgaGVpZ2h0PScxMCc+CiAgPHJlY3Qgd2lkdGg9JzEwJyBoZWlnaHQ9JzEwJyBmaWxsPSd3aGl0ZScvPgogIDxwYXRoIGQ9J00tMSwxIGwyLC0yCiAgICAgICAgICAgTTAsMTAgbDEwLC0xMAogICAgICAgICAgIE05LDExIGwyLC0yJyBzdHJva2U9J2JsYWNrJyBzdHJva2Utd2lkdGg9JzEnLz4KPC9zdmc+Cg==" x="0" y="0" width="10" height="10"> </image> </pattern> </defs> </svg>
+                <svg height="10" width="10" xmlns="http://www.w3.org/2000/svg" version="1.1"> <defs> <pattern id="diagonal-stripe-2" patternUnits="userSpaceOnUse" width="10" height="10"> <image xlink:href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPScxMCcgaGVpZ2h0PScxMCc+CiAgPHJlY3Qgd2lkdGg9JzEwJyBoZWlnaHQ9JzEwJyBmaWxsPSd3aGl0ZScvPgogIDxwYXRoIGQ9J00tMSwxIGwyLC0yCiAgICAgICAgICAgTTAsMTAgbDEwLC0xMAogICAgICAgICAgIE05LDExIGwyLC0yJyBzdHJva2U9J2JsYWNrJyBzdHJva2Utd2lkdGg9JzInLz4KPC9zdmc+" x="0" y="0" width="10" height="10"> </image> </pattern> </defs> </svg>
+                <svg height="10" width="10" xmlns="http://www.w3.org/2000/svg" version="1.1"> <defs> <pattern id="diagonal-stripe-5" patternUnits="userSpaceOnUse" width="10" height="10"> <image xlink:href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPScxMCcgaGVpZ2h0PScxMCc+CiAgPHJlY3Qgd2lkdGg9JzEwJyBoZWlnaHQ9JzEwJyBmaWxsPSdibGFjaycvPgogIDxwYXRoIGQ9J00tMSwxIGwyLC0yCiAgICAgICAgICAgTTAsMTAgbDEwLC0xMAogICAgICAgICAgIE05LDExIGwyLC0yJyBzdHJva2U9J3doaXRlJyBzdHJva2Utd2lkdGg9JzInLz4KPC9zdmc+" x="0" y="0" width="10" height="10"> </image> </pattern> </defs> </svg>
+                <svg height="10" width="10" xmlns="http://www.w3.org/2000/svg" version="1.1"> <defs> <pattern id="circles-1" patternUnits="userSpaceOnUse" width="10" height="10"> <image xlink:href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPScxMCcgaGVpZ2h0PScxMCc+CiAgPHJlY3Qgd2lkdGg9JzEwJyBoZWlnaHQ9JzEwJyBmaWxsPSJ3aGl0ZSIgLz4KICA8Y2lyY2xlIGN4PSIxIiBjeT0iMSIgcj0iMSIgZmlsbD0iYmxhY2siLz4KPC9zdmc+" x="0" y="0" width="10" height="10"> </image> </pattern> </defs> </svg>
+                <svg height="5" width="5" xmlns="http://www.w3.org/2000/svg" version="1.1"> <defs> <pattern id="smalldot" patternUnits="userSpaceOnUse" width="5" height="5"> <image xlink:href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc1JyBoZWlnaHQ9JzUnPgo8cmVjdCB3aWR0aD0nNScgaGVpZ2h0PSc1JyBmaWxsPScjZmZmJy8+CjxyZWN0IHdpZHRoPScxJyBoZWlnaHQ9JzEnIGZpbGw9JyNjY2MnLz4KPC9zdmc+" x="0" y="0" width="5" height="5"> </image> </pattern> </defs> </svg></body>
+        </div>
+</html>

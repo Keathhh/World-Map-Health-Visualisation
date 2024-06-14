@@ -1,0 +1,12 @@
+svg.map {
+        border: 1px solid black;
+        /* background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPScxMCcgaGVpZ2h0PScxMCc+CiAgPHJlY3Qgd2lkdGg9JzEwJyBoZWlnaHQ9JzEwJyBmaWxsPSJ3aGl0ZSIgLz4KICA8Y2lyY2xlIGN4PSIxIiBjeT0iMSIgcj0iMSIgZmlsbD0iYmxhY2siLz4KPC9zdmc+"); */
+        /* z-index: 100; */
+        /* position: relative; */
+        /* filter: grayscale(100%); */
+        /* opacity: 0.8; */
+}
+
+/* svg.map > g {
+        backdrop-filter: invert(70%);
+}        */

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+        <head>
+                <script src="https://d3js.org/d3.v7.min.js"></script>
+                <link rel="stylesheet" href="./index.css">
+                
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Document</title>
+        </head>
+        <body>
+                <script>
+                        // impl: subparser- state machine
+                        var w = h = 500;
+                        var padding = 30;
+                        var W = w-padding;
+                        var H = h-padding;
+
+                        // measure, sex, age, measurement method, combined unit of measure
+                        
+                        // state machine vars
+                        var state_isDataRow = false;
+                        var state_isClassificationRow = true;
+                        
+                        function initSVG() {return d3.select("body").append("svg").attr("width", w).attr("height", h);}
+                        // indetify non oecd: ·, 3 chars in
+                        
+                        // datarow true
+                        function isOECDState(string) {
+                                if (string[0]=="·") {
+                                        return false;
+                                        // return string.slice(3,-1);
+                                } else {
+                                        return true;
+                                        // return string;
+                                }
+                        }
+
+                // classificationrow true
+                function returnClassification(string) {
+                        let classification = string.split(":");
+                        switch (classification[0]) {
+                                case "Measure":
+                                break;
+
+                                case "Sex":
+                                break;
+
+                                case "Age":
+                                break;
+                        
+                                case "Measurement method":
+                                break;
+
+                                case "Combined unit of measure":
+                                break;
+
+                                default:
+                                break;
+                        }
+                }
+
+
+                function isDataRow(col1string) {
+                        let split = col1string.split(":");
+                        if (split.length-1) {
+                                return false;
+                        } else {
+                                return true;
+                        }
+                }
+
+
+
+                // d3.csv("expenditure.csv", (d)=>{console.log(d);})
+                d3.csv("consumption.csv", (d)=>{
+                
+                        // testcase: output only data columns
+                        if (isDataRow(d.column1)) {
+                                if (!isOECDState(d.column1)) {
+                                        console.log(d);
+                                }
+                                
+                        }
+                        
+                        if (state_isClassificationRow) {
+                                
+                        } 
+                        
+                        if (state_isDataRow) {
+                                
+                        }
+                
+                }).then((d)=>{
+
+
+                })
+
+
+
+        </script>
+</body>
+</html>
